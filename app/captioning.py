@@ -22,8 +22,8 @@ def load_caption_model():
     
     print(f"Loading BLIP captioning model on {device}...")
     
-    # Load processor and model
-    processor = BlipProcessor.from_pretrained(config.CAPTION_MODEL_NAME)
+    # Load processor and model (suppress slow processor warning)
+    processor = BlipProcessor.from_pretrained(config.CAPTION_MODEL_NAME, use_fast=False)
     model = BlipForConditionalGeneration.from_pretrained(config.CAPTION_MODEL_NAME)
     
     # Move model to device

@@ -6,6 +6,11 @@ Main Streamlit application
 import streamlit as st
 from pathlib import Path
 import sys
+import os
+
+# Suppress HuggingFace warnings for cleaner output
+os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
+os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
 
 # Add app directory to path
 app_dir = Path(__file__).parent
