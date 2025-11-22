@@ -39,7 +39,7 @@ Write-Host ""
 Write-Host "[3/4] Checking Ollama..." -ForegroundColor Green
 $ollamaRunning = $false
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:11434/api/tags" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
+    $response = Invoke-WebRequest -Uri "http://127.0.0.1:11434/api/tags" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
     if ($response.StatusCode -eq 200) {
         $ollamaRunning = $true
         Write-Host "  ✓ Ollama server is running" -ForegroundColor Green

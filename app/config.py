@@ -21,9 +21,10 @@ for dir_path in [DATA_DIR, VIDEOS_DIR, FRAMES_DIR, CHROMA_DB_DIR]:
 CAPTION_MODEL_NAME = "Salesforce/blip-image-captioning-base"
 
 # Ollama configurations
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
-OLLAMA_LLM_MODEL = "llama3:instruct"
+# Use environment variable for base URL if available (crucial for deployment)
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "llama3:instruct")
 
 # ChromaDB configuration
 CHROMA_COLLECTION_NAME = "video_frames"
@@ -34,18 +35,24 @@ MIN_FPS = 0.2
 MAX_FPS = 5.0
 
 # RAG defaults
-DEFAULT_TOP_K = 5
+DEFAULT_TOP_K = 10  # Increased from 5 to provide more context
 MIN_TOP_K = 3
-MAX_TOP_K = 10
+MAX_TOP_K = 20
 
 # LLM prompt template
-SYSTEM_PROMPT_TEMPLATE = """You are an assistant that answers questions about a CCTV-like video.
+SYSTEM_PROMPT_TEMPLATE = """You are an expert security analyst and video intelligence assistant.
+Your task is to answer questions about a video based on the provided frame descriptions.
 
-Here are descriptions of frames retrieved as relevant:
-
+CONTEXT FROM VIDEO FRAMES:
 {context}
 
-Answer the user's question based only on these descriptions. If the answer is not clearly present in the context, say that you don't know.
+INSTRUCTIONS:
+1. Analyze the provided frame descriptions carefully.
+2. Synthesize information across multiple frames to understand the sequence of events.
+3. If the answer is explicitly found in the descriptions, provide a clear and concise answer.
+4. If the answer can be inferred from the sequence of frames, explain your reasoning.
+5. If the information is missing or ambiguous, state clearly what you know and what is unknown.
+6. Do not hallucinate details not present in the descriptions.
 
 User question: {question}
 

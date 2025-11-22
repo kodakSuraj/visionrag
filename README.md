@@ -177,7 +177,7 @@ Edit `app/config.py` to customize:
 
 **Solutions:**
 - Ensure Ollama is installed and running
-- Check if Ollama is accessible at `http://localhost:11434`
+- Check if Ollama is accessible at `http://127.0.0.1:11434`
 - Verify models are pulled: `ollama list`
 
 ### Model Not Found

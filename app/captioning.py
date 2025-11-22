@@ -62,9 +62,16 @@ def generate_caption(
     # Process image
     inputs = processor(pil_image, return_tensors="pt").to(device)
     
-    # Generate caption
+    # Generate caption with improved parameters
     with torch.no_grad():
-        outputs = model.generate(**inputs, max_length=50)
+        outputs = model.generate(
+            **inputs, 
+            max_length=75,           # Allow longer descriptions
+            min_length=20,           # Encourage more detail
+            num_beams=5,             # Use beam search for better quality
+            repetition_penalty=1.2,  # Reduce repetition
+            early_stopping=True
+        )
     
     # Decode caption
     caption = processor.decode(outputs[0], skip_special_tokens=True)

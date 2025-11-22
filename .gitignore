@@ -16,40 +16,33 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual Environment
 venv/
 env/
 ENV/
-.venv
+.env
 
-# IDE
+# IDEs
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
 
-# Data directories
+# Project Data
 data/videos/*
 data/frames/*
 data/chroma_db/*
-
-# Keep directory structure
 !data/videos/.gitkeep
 !data/frames/.gitkeep
 !data/chroma_db/.gitkeep
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Logs
-*.log
-
 # Streamlit
 .streamlit/secrets.toml
+
+# OS
+Thumbs.db
+.DS_Store
