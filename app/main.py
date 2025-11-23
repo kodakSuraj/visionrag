@@ -22,6 +22,8 @@ import llm_client
 import video_processing
 import captioning
 import rag_pipeline
+import scene_detection
+import audio
 
 
 # Page configuration
@@ -42,6 +44,18 @@ def load_models():
     except Exception as e:
         st.error(f"Failed to load captioning model: {str(e)}")
         return None, None, None
+
+
+@st.cache_resource
+def load_scene_models():
+    """Load and cache Scene Detector and Audio Processor."""
+    try:
+        detector = scene_detection.SceneDetector()
+        audio_proc = audio.AudioProcessor()
+        return detector, audio_proc
+    except Exception as e:
+        st.error(f"Failed to load scene models: {str(e)}")
+        return None, None
 
 
 @st.cache_resource
@@ -73,7 +87,7 @@ def check_system_ready():
     return issues
 
 
-def process_video_pipeline(uploaded_file, video_id, target_fps, model, processor, device, collection):
+def process_video_pipeline(uploaded_file, video_id, target_fps, model, processor, device, collection, sampling_mode, scene_detector=None, audio_processor=None):
     """Complete video processing pipeline."""
     
     progress_bar = st.progress(0)
@@ -88,22 +102,41 @@ def process_video_pipeline(uploaded_file, video_id, target_fps, model, processor
         # Get video info
         video_info = video_processing.get_video_info(video_path)
         
-        # Step 2: Extract frames
-        status_text.text("🎞️ Extracting frames...")
-        progress_bar.progress(20)
-        frames = video_processing.extract_frames(video_path, target_fps)
+        frames = []
+        
+        # Step 2: Extract frames based on mode
+        if sampling_mode == "Smart Scene Detection (CLIP)":
+            status_text.text("🧠 Analyzing video for distinct scenes (CLIP)...")
+            progress_bar.progress(20)
+            if scene_detector:
+                frames = scene_detector.extract_keyframes(video_path, sample_rate=target_fps)
+            else:
+                st.error("Scene detector not loaded.")
+                return None
+        else:
+            status_text.text("🎞️ Extracting frames (Fixed FPS)...")
+            progress_bar.progress(20)
+            frames = video_processing.extract_frames(video_path, target_fps)
         
         if not frames:
             st.error("No frames could be extracted from the video.")
             return None
+            
+        # Step 2.5: Process Audio (if available)
+        audio_records = []
+        if audio_processor:
+            status_text.text("🎤 Transcribing audio...")
+            audio_records = audio_processor.process_video(video_path)
+            if audio_records:
+                st.info(f"Found {len(audio_records)} audio segments.")
         
-        # Step 3: Generate captions
+        # Step 3: Generate captions for visual frames
         status_text.text(f"🖼️ Generating captions for {len(frames)} frames...")
         frame_records = []
         
         for idx, frame_data in enumerate(frames):
             # Update progress
-            caption_progress = 20 + int((idx / len(frames)) * 50)
+            caption_progress = 30 + int((idx / len(frames)) * 40)
             progress_bar.progress(caption_progress)
             status_text.text(f"🖼️ Captioning frame {idx + 1}/{len(frames)}...")
             
@@ -121,15 +154,18 @@ def process_video_pipeline(uploaded_file, video_id, target_fps, model, processor
                 'timestamp_str': frame_data['timestamp_str'],
                 'caption': caption
             })
+            
+        # Combine visual and audio records
+        all_records = frame_records + audio_records
         
         # Step 4: Index in ChromaDB
-        status_text.text("💾 Indexing captions in vector database...")
+        status_text.text(f"💾 Indexing {len(all_records)} items in vector database...")
         progress_bar.progress(80)
         
         num_indexed = rag_pipeline.index_video_frames(
             collection,
             video_id,
-            frame_records,
+            all_records,
             llm_client.get_embedding
         )
         
@@ -140,10 +176,12 @@ def process_video_pipeline(uploaded_file, video_id, target_fps, model, processor
         return {
             'video_id': video_id,
             'num_frames': len(frames),
+            'num_audio': len(audio_records),
             'fps': target_fps,
             'duration': video_info['duration'],
             'video_info': video_info,
-            'num_indexed': num_indexed
+            'num_indexed': num_indexed,
+            'mode': sampling_mode
         }
         
     except Exception as e:
@@ -199,13 +237,13 @@ def main():
         
         sampling_mode = st.radio(
             "Frame Sampling Mode",
-            options=["Fixed FPS (V1 - Active)", "Scene Detection (V2 - Coming Soon)"],
+            options=["Fixed FPS (Standard)", "Smart Scene Detection (CLIP)"],
             index=0,
-            help="V1 uses fixed FPS sampling. Scene detection will be added in V2."
+            help="Smart mode uses AI to find distinct scenes. Fixed FPS takes a snapshot every X seconds."
         )
         
-        if sampling_mode != "Fixed FPS (V1 - Active)":
-            st.info("🚧 Scene detection will be available in V2")
+        if sampling_mode == "Smart Scene Detection (CLIP)":
+            st.info("🧠 Smart mode analyzes visual content to find unique events. It may take longer but produces better results.")
         
         process_button = st.button(
             "🚀 Process Video",
@@ -223,6 +261,7 @@ def main():
         **Captioning:** `{config.CAPTION_MODEL_NAME.split('/')[-1]}`  
         **Embeddings:** `{config.OLLAMA_EMBEDDING_MODEL}`  
         **LLM:** `{config.OLLAMA_LLM_MODEL}`
+        **Audio:** `Whisper (Base)`
         """)
         
         st.info("💡 Cloud LLM support (OpenAI, Anthropic) planned for V2")
@@ -233,6 +272,21 @@ def main():
         model, processor, device = load_models()
         collection = init_chroma()
         
+        # Load scene models if needed
+        scene_detector = None
+        audio_processor = None
+        
+        if sampling_mode == "Smart Scene Detection (CLIP)":
+            with st.spinner("Loading AI Scene Detector (CLIP) & Audio Models..."):
+                scene_detector, audio_processor = load_scene_models()
+                if not scene_detector:
+                    st.error("Failed to load Scene Detector.")
+                    return
+        else:
+            # Even in Fixed FPS, we might want audio? Let's enable audio for both modes
+            with st.spinner("Loading Audio Model..."):
+                _, audio_processor = load_scene_models()
+
         if model is None or collection is None:
             st.error("Failed to load required models. Please check the system status.")
             return
@@ -249,7 +303,10 @@ def main():
             model,
             processor,
             device,
-            collection
+            collection,
+            sampling_mode,
+            scene_detector,
+            audio_processor
         )
         
         if result:
@@ -257,13 +314,15 @@ def main():
             st.success("✅ Video processed successfully!")
             
             # Show summary
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Frames Extracted", result['num_frames'])
+                st.metric("Frames", result['num_frames'])
             with col2:
-                st.metric("Video Duration", f"{result['duration']:.1f}s")
+                st.metric("Duration", f"{result['duration']:.1f}s")
             with col3:
-                st.metric("Sampling Rate", f"{result['fps']} fps")
+                st.metric("Audio Segments", result.get('num_audio', 0))
+            with col4:
+                st.metric("Mode", "Smart" if "Smart" in result['mode'] else "Fixed")
             
             st.balloons()
     
